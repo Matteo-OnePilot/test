@@ -31,17 +31,14 @@ jobs:
           # On filtre : uniquement High/Critical ET qui ont un correctif (patch)
           severity: 'HIGH,CRITICAL'
           ignore-unfixed: true
-          # NE BLOQUE PAS LA CI (exit code 0 même si vulnérabilités)
-          exit-code: '0'
 
       # --- SCAN 2 : Les images Docker ---
       # Trivy-action peut scanner directement le docker-compose
       - name: Scan Docker Compose Images
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'config' # 'config' car on analyse le fichier YAML, pas les images buildées
+          scan-type: 'image' # 'config' car on analyse le fichier YAML, pas les images buildées
           scan-ref: 'docker-compose.yml'
           format: 'table'
           severity: 'HIGH,CRITICAL'
           ignore-unfixed: true
-          exit-code: '0'
