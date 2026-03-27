@@ -1,0 +1,45 @@
+name: Security Scan (Trivy)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+# Nécessaire pour que Trivy puisse écrire un commentaire dans la PR
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  trivy-scan:
+    name: Trivy Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # --- SCAN 1 : Le code (ton requirements.txt) ---
+      - name: Scan Repository (FS)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs' # Scan du système de fichiers (requirements.txt)
+          scan-ref: '.'
+          format: 'table'
+          # On filtre : uniquement High/Critical ET qui ont un correctif (patch)
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          # NE BLOQUE PAS LA CI (exit code 0 même si vulnérabilités)
+          exit-code: '0'
+
+      # --- SCAN 2 : Les images Docker ---
+      # Trivy-action peut scanner directement le docker-compose
+      - name: Scan Docker Compose Images
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config' # 'config' car on analyse le fichier YAML, pas les images buildées
+          scan-ref: 'docker-compose.yml'
+          format: 'table'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          exit-code: '0'
