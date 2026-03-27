@@ -2,4 +2,4 @@
 test
 
 
-test CI
+test CI trivy
