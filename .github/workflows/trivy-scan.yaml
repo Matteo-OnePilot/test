@@ -37,8 +37,9 @@ jobs:
       - name: Scan Docker Compose Images
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'image' # 'config' car on analyse le fichier YAML, pas les images buildées
-          scan-ref: 'docker-compose.yml'
+          scan-type: 'config' # 'config' car on analyse le fichier YAML, pas les images buildées
+          scan-ref: '.'
+          scanners: 'vuln,misconfig'
           format: 'table'
           severity: 'HIGH,CRITICAL'
           ignore-unfixed: true
