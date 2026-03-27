@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  web:
+    # Image très ancienne de Nginx (basée sur une vieille Debian)
+    image: nginx:1.10
+    ports:
+      - "80:80"
+
+  db:
+    # Ancienne version de Postgres (avec des failles OS)
+    image: postgres:9.6
+    environment:
+      POSTGRES_PASSWORD: example
+
+  redis:
+    # Version obsolète de Redis
+    image: redis:5.0
