@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   semgrep:
     name: Scan
@@ -14,17 +18,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # On utilise l'image Docker officielle de Semgrep
       - name: Run Semgrep CLI
         run: |
           docker run --rm -v "${{ github.workspace }}:/src" semgrep/semgrep \
           semgrep scan --config p/default --config p/owasp-top-10 --sarif --output=semgrep.sarif
-        # Le 'continue-on-error' rend le job non bloquant pour la CI
         continue-on-error: true
 
-      # Optionnel : Importe les résultats dans l'onglet "Security" de GitHub
       - name: Upload SARIF file for GitHub Advanced Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: semgrep.sarif
-        if: always() # S'exécute même si Semgrep trouve des failles
+        if: always()
