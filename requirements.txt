@@ -18,7 +18,7 @@ PyYAML==3.12
 
 # CVE-2021-33571 : SSRF (Server-Side Request Forgery)
 # Permet à un attaquant de forcer ton serveur à faire des requêtes internes.
-django==3.2.3
+django==6.0.6
 
 # --- Une lib obsolète pour voir si Dependabot propose le saut de version ---
 # (Pas forcément une CVE immédiate, mais très en retard)
