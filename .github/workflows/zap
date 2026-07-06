@@ -1,0 +1,47 @@
+name: OWASP ZAP Nightly API Scan
+
+on:
+  schedule:
+    # Tourne tous les jours à minuit (heure UTC)
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    # Permet de lancer le scan manuellement depuis l'onglet "Actions"
+
+# Indispensable pour que ZAP puisse créer/modifier des Issues GitHub avec le rapport
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  zap_scan:
+    runs-on: ubuntu-latest
+    name: Scan API with ZAP
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: OWASP ZAP API Scan
+        uses: zaproxy/action-api-scan@v0.10.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # L'URL de ton Swagger/OpenAPI (exposé sur ton staging ou fichier local)
+          target: 'https://api-staging.tondomaine.com/v1/swagger.json'
+          format: 'openapi'
+          # Fait échouer la CI si des vulnérabilités sont trouvées
+          fail_action: true
+          issue_title: 'Alerte Sécurité : Rapport OWASP ZAP Nightly'
+        
+        # C'est ici qu'on gère l'authentification proprement si ton API est protégée
+        env:
+          ZAP_AUTH_HEADER: 'Authorization'
+          ZAP_AUTH_HEADER_VALUE: 'Bearer ${{ secrets.MY_API_TEST_TOKEN }}'
+
+      # Si tu veux récupérer manuellement les fichiers de rapports générés (HTML / Markdown)
+      - name: Upload ZAP Report Artifact
+        uses: actions/upload-artifact@v4
+        if: always() # S'assure de télécharger le rapport même si des failles font planter le job
+        with:
+          name: zap-api-report
+          path: |
+            zap_out.html
+            zap_out.md
