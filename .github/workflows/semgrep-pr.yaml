@@ -53,7 +53,7 @@ jobs:
             --config p/secrets \
             --config p/github-actions \
             --json --output semgrep-results.json \
-            --metrics=off \
+            --metrics=on \
             --error \
             -- ${{ steps.changed.outputs.files }}
 

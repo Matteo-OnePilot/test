@@ -39,7 +39,7 @@ jobs:
             --config p/secrets \
             --config p/github-actions \
             --sarif --output semgrep-results.sarif \
-            --metrics=off \
+            --metrics=on \
             --error
 
       - name: Upload SARIF to GitHub Code Scanning
