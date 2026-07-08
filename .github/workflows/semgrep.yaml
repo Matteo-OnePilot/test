@@ -3,8 +3,6 @@ name: Semgrep SAST
 on:
   pull_request:
     branches: [main]
-  schedule:
-    - cron: "0 5 * * 1"
   workflow_dispatch:
 
 concurrency:
@@ -13,7 +11,7 @@ concurrency:
 
 permissions:
   contents: read
-  security-events: write # requis pour publier le SARIF dans l'onglet Security
+  security-events: write
 
 jobs:
   semgrep:
