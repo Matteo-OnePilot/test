@@ -49,11 +49,7 @@ jobs:
         continue-on-error: true
         run: |
           semgrep scan \
-            --config p/security-audit \
-            --config p/owasp-top-ten \
-            --config p/secrets \
-            --config p/python \
-            --config p/django \
+            --config auto \
             --config p/github-actions \
             --json --output semgrep-results.json \
             --metrics=off \
