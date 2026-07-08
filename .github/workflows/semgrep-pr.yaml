@@ -1,0 +1,132 @@
+name: Semgrep PR Scan
+
+# Scans only the files changed in the PR and posts a summary comment.
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: semgrep-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  semgrep-pr:
+    name: Scan changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: semgrep/semgrep
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
+          FILES=$(git diff --name-only --diff-filter=ACMRT "origin/${{ github.event.pull_request.base.ref }}" "${{ github.event.pull_request.head.sha }}" | tr '\n' ' ')
+          echo "Changed files: $FILES"
+          echo "files=$FILES" >> "$GITHUB_OUTPUT"
+
+      - name: Run Semgrep
+        id: semgrep
+        if: steps.changed.outputs.files != ''
+        continue-on-error: true
+        run: |
+          semgrep scan \
+            --config auto \
+            --config p/security-audit \
+            --config p/owasp-top-ten \
+            --config p/secrets \
+            --config p/github-actions \
+            --json --output semgrep-results.json \
+            --metrics=on \
+            --error \
+            -- ${{ steps.changed.outputs.files }}
+
+      - name: Build comment body
+        if: steps.changed.outputs.files != ''
+        run: |
+          python3 - <<'PYEOF'
+          import json
+
+          try:
+              with open("semgrep-results.json") as f:
+                  data = json.load(f)
+          except FileNotFoundError:
+              data = {"results": []}
+
+          results = data.get("results", [])
+          marker = "<!-- semgrep-pr-comment -->"
+
+          if not results:
+              body = marker + "\n### Semgrep\nNo issues found in the files changed by this PR."
+          else:
+              rows = []
+              for r in results:
+                  sev = r["extra"]["severity"]
+                  rule = r["check_id"].split(".")[-1]
+                  path = r["path"]
+                  line = r["start"]["line"]
+                  msg = r["extra"]["message"].replace("\n", " ").replace("|", "/")
+                  rows.append(f"| {sev} | `{rule}` | `{path}:{line}` | {msg} |")
+
+              body = (
+                  marker + "\n"
+                  f"### Semgrep: {len(results)} finding(s) in changed files\n\n"
+                  "| Severity | Rule | Location | Message |\n"
+                  "|---|---|---|---|\n"
+                  + "\n".join(rows)
+                  + "\n\n_Full repo scan runs nightly, see Security > Code scanning alerts._"
+              )
+
+          with open("semgrep-comment.md", "w") as f:
+              f.write(body)
+          PYEOF
+
+      - name: Post or update PR comment
+        if: steps.changed.outputs.files != ''
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('semgrep-comment.md', 'utf8');
+            const marker = '<!-- semgrep-pr-comment -->';
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find((c) => c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail if Semgrep found issues
+        if: steps.semgrep.outcome == 'failure'
+        run: |
+          echo "::error::Semgrep found issues in the changed files. See the PR comment."
+          exit 1
