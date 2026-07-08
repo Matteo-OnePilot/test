@@ -23,3 +23,14 @@ django==3.2.3
 # --- Une lib obsolète pour voir si Dependabot propose le saut de version ---
 # (Pas forcément une CVE immédiate, mais très en retard)
 pandas==1.0.0
+
+# --- Dépendances utilisées par vulnapp/ (le faux code applicatif) ---
+
+# CVE-2015-9235 : Confusion d'algorithme JWT (accepte "alg": "none")
+PyJWT==1.5.3
+
+# CVE-2021-43818 : XSS via lxml.html.clean.Cleaner (corrigé en 4.6.5)
+lxml==4.6.4
+
+# CVE-2013-7459 : Buffer overflow dans ALGnew — lib abandonnée depuis 2013
+pycrypto==2.6.1
