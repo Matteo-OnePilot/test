@@ -1,8 +1,13 @@
 name: Semgrep SAST
 
 on:
+  push:
+    branches: [main, "feat/**", "fix/**"]
   pull_request:
     branches: [main]
+  schedule:
+    # Scan hebdomadaire indépendant des PR, pour détecter les nouvelles règles/CVE
+    - cron: "0 5 * * 1"
   workflow_dispatch:
 
 concurrency:
@@ -41,7 +46,7 @@ jobs:
 
       - name: Upload SARIF to GitHub Code Scanning
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: semgrep-results.sarif
 
