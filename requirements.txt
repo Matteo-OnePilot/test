@@ -6,7 +6,7 @@ setuptools==65.5.0
 
 # CVE-2022-34749 : Injection de code / Corruption de mémoire
 # Une version particulièrement instable et risquée.
-pillow==9.1.1
+pillow==12.2.0
 
 # CVE-2018-18074 : Fuite de credentials (fuite du header Authorization)
 # Très dangereux si ton app communique avec plusieurs domaines.
