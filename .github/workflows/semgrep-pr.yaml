@@ -1,0 +1,140 @@
+name: Semgrep — PR Scan
+
+# Scan rapide et ciblé : uniquement les fichiers modifiés par la PR.
+# Ne touche pas à l'onglet Security > Code scanning (voir semgrep-nightly.yaml pour ça),
+# poste juste un commentaire récapitulatif sur la PR.
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: semgrep-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  semgrep-pr:
+    name: Scan des fichiers modifiés
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: semgrep/semgrep
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Identifier les fichiers modifiés
+        id: changed
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
+          FILES=$(git diff --name-only --diff-filter=ACMRT "origin/${{ github.event.pull_request.base.ref }}" "${{ github.event.pull_request.head.sha }}")
+          echo "Fichiers modifiés :"
+          echo "$FILES"
+          {
+            echo "files<<EOF"
+            echo "$FILES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Semgrep sur les fichiers modifiés
+        id: semgrep
+        if: steps.changed.outputs.files != ''
+        continue-on-error: true
+        run: |
+          semgrep scan \
+            --config p/security-audit \
+            --config p/owasp-top-ten \
+            --config p/secrets \
+            --config p/python \
+            --config p/django \
+            --config p/github-actions \
+            --json --output semgrep-results.json \
+            --metrics=off \
+            --error \
+            -- ${{ steps.changed.outputs.files }}
+
+      - name: Générer le commentaire Markdown
+        if: steps.changed.outputs.files != ''
+        run: |
+          python3 - <<'PYEOF'
+          import json
+
+          try:
+              with open("semgrep-results.json") as f:
+                  data = json.load(f)
+          except FileNotFoundError:
+              data = {"results": []}
+
+          results = data.get("results", [])
+          marker = "<!-- semgrep-pr-comment -->"
+
+          if not results:
+              body = marker + "\n### Semgrep\nAucun probleme detecte par Semgrep sur les fichiers modifies de cette PR."
+          else:
+              rows = []
+              for r in results:
+                  sev = r["extra"]["severity"]
+                  rule = r["check_id"].split(".")[-1]
+                  path = r["path"]
+                  line = r["start"]["line"]
+                  msg = r["extra"]["message"].replace("\n", " ").replace("|", "/")
+                  rows.append(f"| {sev} | `{rule}` | `{path}:{line}` | {msg} |")
+
+              body = (
+                  marker + "\n"
+                  f"### Semgrep — {len(results)} resultat(s) sur les fichiers modifies\n\n"
+                  "| Severite | Regle | Emplacement | Message |\n"
+                  "|---|---|---|---|\n"
+                  + "\n".join(rows)
+                  + "\n\n_Scan complet du repo disponible chaque nuit dans l'onglet Security > Code scanning alerts._"
+              )
+
+          with open("semgrep-comment.md", "w") as f:
+              f.write(body)
+          PYEOF
+
+      - name: Publier / mettre a jour le commentaire sur la PR
+        if: steps.changed.outputs.files != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('semgrep-comment.md', 'utf8');
+            const marker = '<!-- semgrep-pr-comment -->';
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find((c) => c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail si Semgrep a trouve des problemes
+        if: steps.semgrep.outcome == 'failure'
+        run: |
+          echo "::error::Semgrep a detecte des vulnerabilites sur les fichiers modifies. Voir le commentaire sur la PR."
+          exit 1
