@@ -2,23 +2,23 @@
 
 # CVE-2022-40897 : ReDoS (Déni de service par expression régulière)
 # Une faille classique qui peut paralyser ton serveur.
-setuptools==65.5.0
+setuptools==78.1.1
 
 # CVE-2022-34749 : Injection de code / Corruption de mémoire
 # Une version particulièrement instable et risquée.
-pillow==9.1.1
+pillow==12.2.0
 
 # CVE-2018-18074 : Fuite de credentials (fuite du header Authorization)
 # Très dangereux si ton app communique avec plusieurs domaines.
-requests==2.19.1
+requests==2.33.0
 
 # CVE-2017-18342 : Insecure Deserialization (RCE - Remote Code Execution)
 # C'est la "reine" des failles : permet potentiellement de prendre le contrôle du serveur.
-PyYAML==3.12
+PyYAML==6.0.3
 
 # CVE-2021-33571 : SSRF (Server-Side Request Forgery)
 # Permet à un attaquant de forcer ton serveur à faire des requêtes internes.
-django==3.2.3
+django==4.2.30
 
 # --- Une lib obsolète pour voir si Dependabot propose le saut de version ---
 # (Pas forcément une CVE immédiate, mais très en retard)
