@@ -1,20 +1,62 @@
-name: Semgrep CLI Scan
+name: Semgrep SAST
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+  schedule:
+    - cron: "0 5 * * 1"
   workflow_dispatch:
-  
+
+concurrency:
+  group: semgrep-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write # requis pour publier le SARIF dans l'onglet Security
 
 jobs:
   semgrep:
     name: Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: semgrep/semgrep
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Semgrep x semgrep-rules-manager
-        uses: iosifache/semgrep-rules-manager@release
+      - name: Run Semgrep
+        id: semgrep
+        continue-on-error: true
+        run: |
+          semgrep scan \
+            --config p/security-audit \
+            --config p/owasp-top-ten \
+            --config p/secrets \
+            --config p/python \
+            --config p/django \
+            --config p/github-actions \
+            --sarif --output semgrep-results.sarif \
+            --metrics=off \
+            --error
+
+      - name: Upload SARIF to GitHub Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep-results.sarif
+
+      - name: Upload Semgrep report as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-results
+          path: semgrep-results.sarif
+          retention-days: 30
+
+      - name: Fail the build if Semgrep found issues
+        if: steps.semgrep.outcome == 'failure'
+        run: |
+          echo "::error::Semgrep a détecté des vulnérabilités. Voir l'onglet Security > Code scanning alerts pour le détail."
+          exit 1

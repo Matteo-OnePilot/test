@@ -1,0 +1,8 @@
+{# Template volontairement vulnérable : usage de |safe sur une entrée utilisateur (XSS, CWE-79) #}
+<html>
+  <body>
+    <h1>Profil de {{ username }}</h1>
+    <div class="bio">{{ bio|safe }}</div>
+    <img src="{{ avatar_url }}" onerror="{{ debug_callback|safe }}" />
+  </body>
+</html>
