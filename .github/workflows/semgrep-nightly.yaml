@@ -1,8 +1,10 @@
-name: Semgrep — Nightly Full Scan
+name: Semgrep Nightly Full Scan
+
+# Full repo scan on a schedule, uploads SARIF to GitHub Code Scanning.
 
 on:
   schedule:
-    - cron: "0 2 * * *" # tous les jours a 02h00 UTC
+    - cron: "0 2 * * *"
   push:
     branches: [main]
   workflow_dispatch:
@@ -17,7 +19,7 @@ permissions:
 
 jobs:
   semgrep-full:
-    name: Scan complet
+    name: Full scan
     runs-on: ubuntu-latest
     timeout-minutes: 20
     container:
@@ -26,12 +28,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Semgrep (repo entier)
+      - name: Run Semgrep
         id: semgrep
         continue-on-error: true
         run: |
           semgrep scan \
             --config auto \
+            --config p/security-audit \
+            --config p/owasp-top-ten \
+            --config p/secrets \
             --config p/github-actions \
             --sarif --output semgrep-results.sarif \
             --metrics=off \
@@ -49,10 +54,10 @@ jobs:
         with:
           name: semgrep-nightly-results
           path: semgrep-results.sarif
-          retention-days: 30
+          retention-days: 10
 
       - name: Fail the build if Semgrep found issues
         if: steps.semgrep.outcome == 'failure'
         run: |
-          echo "::error::Semgrep a detecte des vulnerabilites. Voir l'onglet Security > Code scanning alerts pour le detail."
+          echo "::error::Semgrep found issues. See Security > Code scanning alerts."
           exit 1

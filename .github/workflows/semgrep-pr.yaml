@@ -1,8 +1,6 @@
-name: Semgrep — PR Scan
+name: Semgrep PR Scan
 
-# Scan rapide et ciblé : uniquement les fichiers modifiés par la PR.
-# Ne touche pas à l'onglet Security > Code scanning (voir semgrep-nightly.yaml pour ça),
-# poste juste un commentaire récapitulatif sur la PR.
+# Scans only the files changed in the PR and posts a summary comment.
 
 on:
   pull_request:
@@ -18,7 +16,7 @@ permissions:
 
 jobs:
   semgrep-pr:
-    name: Scan des fichiers modifiés
+    name: Scan changed files
     runs-on: ubuntu-latest
     timeout-minutes: 10
     container:
@@ -29,13 +27,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Identifier les fichiers modifiés
+      - name: Get changed files
         id: changed
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
           FILES=$(git diff --name-only --diff-filter=ACMRT "origin/${{ github.event.pull_request.base.ref }}" "${{ github.event.pull_request.head.sha }}")
-          echo "Fichiers modifiés :"
+          echo "Changed files:"
           echo "$FILES"
           {
             echo "files<<EOF"
@@ -43,20 +41,23 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Run Semgrep sur les fichiers modifiés
+      - name: Run Semgrep
         id: semgrep
         if: steps.changed.outputs.files != ''
         continue-on-error: true
         run: |
           semgrep scan \
             --config auto \
+            --config p/security-audit \
+            --config p/owasp-top-ten \
+            --config p/secrets \
             --config p/github-actions \
             --json --output semgrep-results.json \
             --metrics=off \
             --error \
             -- ${{ steps.changed.outputs.files }}
 
-      - name: Générer le commentaire Markdown
+      - name: Build comment body
         if: steps.changed.outputs.files != ''
         run: |
           python3 - <<'PYEOF'
@@ -72,7 +73,7 @@ jobs:
           marker = "<!-- semgrep-pr-comment -->"
 
           if not results:
-              body = marker + "\n### Semgrep\nAucun probleme detecte par Semgrep sur les fichiers modifies de cette PR."
+              body = marker + "\n### Semgrep\nNo issues found in the files changed by this PR."
           else:
               rows = []
               for r in results:
@@ -85,18 +86,18 @@ jobs:
 
               body = (
                   marker + "\n"
-                  f"### Semgrep — {len(results)} resultat(s) sur les fichiers modifies\n\n"
-                  "| Severite | Regle | Emplacement | Message |\n"
+                  f"### Semgrep: {len(results)} finding(s) in changed files\n\n"
+                  "| Severity | Rule | Location | Message |\n"
                   "|---|---|---|---|\n"
                   + "\n".join(rows)
-                  + "\n\n_Scan complet du repo disponible chaque nuit dans l'onglet Security > Code scanning alerts._"
+                  + "\n\n_Full repo scan runs nightly, see Security > Code scanning alerts._"
               )
 
           with open("semgrep-comment.md", "w") as f:
               f.write(body)
           PYEOF
 
-      - name: Publier / mettre a jour le commentaire sur la PR
+      - name: Post or update PR comment
         if: steps.changed.outputs.files != ''
         uses: actions/github-script@v7
         with:
@@ -129,8 +130,8 @@ jobs:
               });
             }
 
-      - name: Fail si Semgrep a trouve des problemes
+      - name: Fail if Semgrep found issues
         if: steps.semgrep.outcome == 'failure'
         run: |
-          echo "::error::Semgrep a detecte des vulnerabilites sur les fichiers modifies. Voir le commentaire sur la PR."
+          echo "::error::Semgrep found issues in the changed files. See the PR comment."
           exit 1
